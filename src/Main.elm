@@ -1,13 +1,33 @@
 module Main exposing (main)
 
 import Browser
+import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Attributes exposing (class, for, id, placeholder, type_)
 import SvgAssets
 
 
 type alias Model =
-    {}
+    { keyBinds : KeyBinds }
+
+
+type KeyBinds
+    = NotProvided
+    | ErrorParsing ()
+    | Parsing
+    | Parsed (Dict String KeyInfo)
+
+
+type alias KeyInfo =
+    { modifiers : List KeyModifiers
+    , action : String
+    }
+
+
+type KeyModifiers
+    = Ctrl
+    | Shift
+    | Super
 
 
 type Msg
@@ -16,7 +36,7 @@ type Msg
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( {}, Cmd.none )
+    ( { keyBinds = NotProvided }, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -231,7 +251,7 @@ viewUploadConfig =
                 , p [ class "text-sm text-zinc-400" ]
                     [ text "Drop your "
                     , code [ class "text-zinc-200" ]
-                        [ text "config.kdl" ]
+                        [ text "config.kdl " ]
                     , text "here"
                     ]
                 ]
