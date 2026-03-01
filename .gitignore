@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 
 elm-stuff/**
+
+parser/target/**
