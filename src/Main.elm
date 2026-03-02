@@ -4,6 +4,8 @@ import Browser
 import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Attributes exposing (class, for, id, placeholder, type_)
+import Json.Decode as Decode
+import Ports
 import SvgAssets
 
 
@@ -31,7 +33,7 @@ type KeyModifiers
 
 
 type Msg
-    = NoOp
+    = GotParsed Decode.Value
 
 
 init : () -> ( Model, Cmd Msg )
@@ -42,7 +44,7 @@ init _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        NoOp ->
+        GotParsed _ ->
             ( model, Cmd.none )
 
 
@@ -355,7 +357,7 @@ viewKeyMapInfo =
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Sub.none
+    Ports.receiveParsed GotParsed
 
 
 main : Program () Model Msg

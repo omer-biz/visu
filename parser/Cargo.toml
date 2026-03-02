@@ -3,6 +3,9 @@ name = "parser"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+crate-type = ["cdylib"]
+
 [dependencies]
 kdl = { version = "6.5.0", features = ["v1-fallback"] }
 serde = { version = "1.0.228", features = ["derive"] }
