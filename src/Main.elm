@@ -4,7 +4,7 @@ import Browser
 import Dict exposing (Dict)
 import File exposing (File)
 import Html exposing (..)
-import Html.Attributes exposing (accept, class, for, id, placeholder, type_)
+import Html.Attributes exposing (accept, class, placeholder, type_)
 import Html.Events exposing (on)
 import Json.Decode as Decode
 import Ports
@@ -314,16 +314,18 @@ keyboardLayout =
     , { id = "comma", label = ",", span = 4 }
     , { id = "period", label = ".", span = 4 }
     , { id = "slash", label = "/", span = 4 }
-    , { id = "shiftright", label = "Shift", span = 11 }
+    , { id = "up", label = "↑", span = 4 }
+    , { id = "shiftright", label = "Shift", span = 7 }
 
     -- Row 5
-    , { id = "controlleft", label = "Ctrl", span = 6 }
+    , { id = "ctrlleft", label = "Ctrl", span = 6 }
     , { id = "superleft", label = "Super", span = 6 }
     , { id = "altleft", label = "Alt", span = 6 }
     , { id = "space", label = "", span = 24 }
     , { id = "altright", label = "Alt", span = 6 }
-    , { id = "superright", label = "Super", span = 6 }
-    , { id = "controlright", label = "Ctrl", span = 6 }
+    , { id = "left", label = "←", span = 4 }
+    , { id = "down", label = "↓", span = 4 }
+    , { id = "right", label = "→", span = 4 }
     ]
 
 
@@ -493,6 +495,15 @@ viewUploadConfig =
             ]
         , hr [ class "border-zinc-800" ]
             []
+        , div [ class "mt-12 bg-zinc-800/30 border border-zinc-800 rounded-xl p-4" ]
+            [ h4 [ class "text-xs font-bold text-zinc-400 mb-4 uppercase tracking-widest" ]
+                [ text "Global Filter" ]
+            , div [ class "relative" ]
+                [ input [ class "w-full bg-zinc-950 border border-zinc-700 rounded-lg py-2 pl-9 pr-4 text-xs focus:ring-1 focus:ring-violet-500 focus:outline-none focus:border-violet-500", placeholder "Search actions (e.g. 'spawn')", type_ "text" ]
+                    []
+                , SvgAssets.search
+                ]
+            ]
         ]
 
 
@@ -554,15 +565,6 @@ viewKeyMapInfo model =
              else
                 List.map viewBindingDetail bindings
             )
-        , div [ class "mt-12 bg-zinc-800/30 border border-zinc-800 rounded-xl p-4" ]
-            [ h4 [ class "text-xs font-bold text-zinc-400 mb-4 uppercase tracking-widest" ]
-                [ text "Global Filter" ]
-            , div [ class "relative" ]
-                [ input [ class "w-full bg-zinc-950 border border-zinc-700 rounded-lg py-2 pl-9 pr-4 text-xs focus:ring-1 focus:ring-violet-500 focus:outline-none focus:border-violet-500", placeholder "Search actions (e.g. 'spawn')", type_ "text" ]
-                    []
-                , SvgAssets.search
-                ]
-            ]
         ]
 
 
