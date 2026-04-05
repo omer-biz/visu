@@ -16,6 +16,7 @@ type alias Model =
     { keyBinds : KeyBinds
     , selectedKey : Maybe String
     , viewMode : ViewMode
+    , searchQuery : String
     }
 
 
@@ -56,6 +57,7 @@ type Msg
     | FileLoaded String
     | KeySelected String
     | ChangeViewMode ViewMode
+    | UpdateSearchQuery String
 
 
 onFileChange : (File -> msg) -> Attribute msg
@@ -69,7 +71,7 @@ onFileChange tagger =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { keyBinds = NotProvided, selectedKey = Nothing, viewMode = Physical }, Cmd.none )
+    ( { keyBinds = NotProvided, selectedKey = Nothing, viewMode = Physical, searchQuery = "" }, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -119,6 +121,9 @@ update msg model =
 
         ChangeViewMode mode ->
             ( { model | viewMode = mode }, Cmd.none )
+
+        UpdateSearchQuery query ->
+            ( { model | searchQuery = query }, Cmd.none )
 
 
 type Response
@@ -205,7 +210,7 @@ view model =
                     0
     in
     main_ [ class "flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden" ]
-        [ viewUploadConfig
+        [ viewUploadConfig model
         , viewKeyBoard model
         , viewKeyMapInfo model
         , if activeBindings > 0 then
@@ -276,7 +281,9 @@ viewList model =
         Parsed dict ->
             let
                 allBindings =
-                    Dict.values dict |> List.concat
+                    Dict.values dict
+                        |> List.concat
+                        |> List.filter (matchesSearch model.searchQuery)
 
                 activeBindingsCount =
                     List.length allBindings
@@ -386,7 +393,9 @@ viewKey model keyDef =
         bindings =
             case model.keyBinds of
                 Parsed dict ->
-                    Dict.get keyDef.id dict |> Maybe.withDefault []
+                    Dict.get keyDef.id dict
+                        |> Maybe.withDefault []
+                        |> List.filter (matchesSearch model.searchQuery)
 
                 _ ->
                     []
@@ -466,6 +475,24 @@ getSpanClass span =
             "col-span-" ++ String.fromInt span
 
 
+matchesSearch : String -> Binding -> Bool
+matchesSearch query binding =
+    if String.isEmpty query then
+        True
+
+    else
+        let
+            q = String.toLower query
+
+            matchesAction =
+                List.any (\action -> String.contains q (String.toLower action)) binding.actions
+
+            matchesKey =
+                String.contains q (String.toLower binding.key)
+        in
+        matchesAction || matchesKey
+
+
 modifierToString : KeyModifier -> String
 modifierToString mod =
     case mod of
@@ -518,8 +545,8 @@ viewLegend =
         ]
 
 
-viewUploadConfig : Html Msg
-viewUploadConfig =
+viewUploadConfig : Model -> Html Msg
+viewUploadConfig model =
     aside [ class "lg:col-span-3 border-r border-zinc-800 bg-zinc-900/50 p-6 flex flex-col gap-6 overflow-y-auto" ]
         [ section []
             [ label [ class "text-xs font-bold uppercase tracking-widest text-zinc-500 mb-3 block" ]
@@ -550,7 +577,13 @@ viewUploadConfig =
             [ h4 [ class "text-xs font-bold text-zinc-400 mb-4 uppercase tracking-widest" ]
                 [ text "Global Filter" ]
             , div [ class "relative" ]
-                [ input [ class "w-full bg-zinc-950 border border-zinc-700 rounded-lg py-2 pl-9 pr-4 text-xs focus:ring-1 focus:ring-violet-500 focus:outline-none focus:border-violet-500", placeholder "Search actions (e.g. 'spawn')", type_ "text" ]
+                [ input
+                    [ class "w-full bg-zinc-950 border border-zinc-700 rounded-lg py-2 pl-9 pr-4 text-xs focus:ring-1 focus:ring-violet-500 focus:outline-none focus:border-violet-500"
+                    , placeholder "Search actions (e.g. 'spawn')"
+                    , type_ "text"
+                    , Html.Attributes.value model.searchQuery
+                    , Html.Events.onInput UpdateSearchQuery
+                    ]
                     []
                 , SvgAssets.search
                 ]
@@ -567,7 +600,9 @@ viewKeyMapInfo model =
         bindings =
             case model.keyBinds of
                 Parsed dict ->
-                    Dict.get selectedId dict |> Maybe.withDefault []
+                    Dict.get selectedId dict
+                        |> Maybe.withDefault []
+                        |> List.filter (matchesSearch model.searchQuery)
 
                 _ ->
                     []
