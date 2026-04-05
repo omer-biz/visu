@@ -256,7 +256,7 @@ type alias KeyDef =
 keyboardLayout : List KeyDef
 keyboardLayout =
     [ -- Row 1
-      { id = "Escape", label = "Esc", span = 4 }
+      { id = "escape", label = "Esc", span = 4 }
     , { id = "1", label = "1", span = 4 }
     , { id = "2", label = "2", span = 4 }
     , { id = "3", label = "3", span = 4 }
@@ -267,12 +267,12 @@ keyboardLayout =
     , { id = "8", label = "8", span = 4 }
     , { id = "9", label = "9", span = 4 }
     , { id = "0", label = "0", span = 4 }
-    , { id = "Minus", label = "-", span = 4 }
-    , { id = "Equal", label = "=", span = 4 }
-    , { id = "Backspace", label = "Backspace", span = 8 }
+    , { id = "minus", label = "-", span = 4 }
+    , { id = "equal", label = "=", span = 4 }
+    , { id = "backspace", label = "Backspace", span = 8 }
 
     -- Row 2
-    , { id = "Tab", label = "Tab", span = 6 }
+    , { id = "tab", label = "Tab", span = 6 }
     , { id = "q", label = "Q", span = 4 }
     , { id = "w", label = "W", span = 4 }
     , { id = "e", label = "E", span = 4 }
@@ -283,12 +283,12 @@ keyboardLayout =
     , { id = "i", label = "I", span = 4 }
     , { id = "o", label = "O", span = 4 }
     , { id = "p", label = "P", span = 4 }
-    , { id = "BracketLeft", label = "[", span = 4 }
-    , { id = "BracketRight", label = "]", span = 4 }
-    , { id = "Backslash", label = "\\", span = 6 }
+    , { id = "bracketleft", label = "[", span = 4 }
+    , { id = "bracketright", label = "]", span = 4 }
+    , { id = "backslash", label = "\\", span = 6 }
 
     -- Row 3
-    , { id = "CapsLock", label = "Caps", span = 7 }
+    , { id = "capslock", label = "Caps", span = 7 }
     , { id = "a", label = "A", span = 4 }
     , { id = "s", label = "S", span = 4 }
     , { id = "d", label = "D", span = 4 }
@@ -298,12 +298,12 @@ keyboardLayout =
     , { id = "j", label = "J", span = 4 }
     , { id = "k", label = "K", span = 4 }
     , { id = "l", label = "L", span = 4 }
-    , { id = "Semicolon", label = ";", span = 4 }
-    , { id = "Quote", label = "'", span = 4 }
-    , { id = "Return", label = "Enter", span = 9 }
+    , { id = "semicolon", label = ";", span = 4 }
+    , { id = "quote", label = "'", span = 4 }
+    , { id = "return", label = "Enter", span = 9 }
 
     -- Row 4
-    , { id = "ShiftLeft", label = "Shift", span = 9 }
+    , { id = "shiftleft", label = "Shift", span = 9 }
     , { id = "z", label = "Z", span = 4 }
     , { id = "x", label = "X", span = 4 }
     , { id = "c", label = "C", span = 4 }
@@ -311,19 +311,19 @@ keyboardLayout =
     , { id = "b", label = "B", span = 4 }
     , { id = "n", label = "N", span = 4 }
     , { id = "m", label = "M", span = 4 }
-    , { id = "Comma", label = ",", span = 4 }
-    , { id = "Period", label = ".", span = 4 }
-    , { id = "Slash", label = "/", span = 4 }
-    , { id = "ShiftRight", label = "Shift", span = 11 }
+    , { id = "comma", label = ",", span = 4 }
+    , { id = "period", label = ".", span = 4 }
+    , { id = "slash", label = "/", span = 4 }
+    , { id = "shiftright", label = "Shift", span = 11 }
 
     -- Row 5
-    , { id = "ControlLeft", label = "Ctrl", span = 6 }
-    , { id = "SuperLeft", label = "Super", span = 6 }
-    , { id = "AltLeft", label = "Alt", span = 6 }
-    , { id = "Space", label = "", span = 24 }
-    , { id = "AltRight", label = "Alt", span = 6 }
-    , { id = "SuperRight", label = "Super", span = 6 }
-    , { id = "ControlRight", label = "Ctrl", span = 6 }
+    , { id = "controlleft", label = "Ctrl", span = 6 }
+    , { id = "superleft", label = "Super", span = 6 }
+    , { id = "altleft", label = "Alt", span = 6 }
+    , { id = "space", label = "", span = 24 }
+    , { id = "altright", label = "Alt", span = 6 }
+    , { id = "superright", label = "Super", span = 6 }
+    , { id = "controlright", label = "Ctrl", span = 6 }
     ]
 
 
@@ -493,36 +493,6 @@ viewUploadConfig =
             ]
         , hr [ class "border-zinc-800" ]
             []
-        , section [ class "space-y-4" ]
-            [ label [ class "text-xs font-bold uppercase tracking-widest text-zinc-500 block" ]
-                [ text "Preferences" ]
-            , div [ class "flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg border border-zinc-700/50" ]
-                [ span [ class "text-sm" ]
-                    [ text "Keyboard Layout" ]
-                , select [ class "bg-transparent text-sm font-medium focus:outline-none" ]
-                    [ option []
-                        [ text "ANSI" ]
-                    , option []
-                        [ text "ISO" ]
-                    ]
-                ]
-            , div [ class "space-y-2" ]
-                [ div [ class "flex justify-between text-xs text-zinc-500 px-1" ]
-                    [ span []
-                        [ text "Key Size" ]
-                    , span []
-                        [ text "Medium" ]
-                    ]
-                , input [ class "w-full accent-violet-500", type_ "range" ]
-                    []
-                ]
-            , div [ class "flex items-center gap-3" ]
-                [ input [ class "w-4 h-4 rounded border-zinc-700 bg-zinc-800 text-violet-600 focus:ring-violet-500", id "unbound", type_ "checkbox" ]
-                    []
-                , label [ class "text-sm text-zinc-300", for "unbound" ]
-                    [ text "Show unbound keys" ]
-                ]
-            ]
         ]
 
 
@@ -547,9 +517,27 @@ viewKeyMapInfo model =
         [ div [ class "flex items-end justify-between mb-8" ]
             [ div []
                 [ h3 [ class "text-4xl font-black text-white uppercase" ]
-                    [ text (if selectedId == "" then "-" else selectedId) ]
+                    [ text
+                        (if selectedId == "" then
+                            "-"
+
+                         else
+                            selectedId
+                        )
+                    ]
                 , p [ class "text-zinc-500 text-sm font-medium" ]
-                    [ text (String.fromInt bindingCount ++ " Binding" ++ (if bindingCount == 1 then "" else "s") ++ " Found") ]
+                    [ text
+                        (String.fromInt bindingCount
+                            ++ " Binding"
+                            ++ (if bindingCount == 1 then
+                                    ""
+
+                                else
+                                    "s"
+                               )
+                            ++ " Found"
+                        )
+                    ]
                 ]
             , button [ class "text-zinc-500 hover:text-white mb-1" ]
                 [ SvgAssets.clipboard

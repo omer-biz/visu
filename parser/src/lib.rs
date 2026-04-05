@@ -51,7 +51,7 @@ fn parse_single_bind(node: &KdlNode) -> Binding {
 
     for (i, part) in parts.iter().enumerate() {
         if i == parts.len() - 1 {
-            key = part.to_string();
+            key = part.to_string().to_lowercase();
         } else {
             if let Some(m) = map_modifier(part) {
                 modifiers.push(m)
