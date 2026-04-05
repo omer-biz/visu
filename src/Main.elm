@@ -2,11 +2,14 @@ module Main exposing (main)
 
 import Browser
 import Dict exposing (Dict)
+import File exposing (File)
 import Html exposing (..)
-import Html.Attributes exposing (class, for, id, placeholder, type_)
+import Html.Attributes exposing (accept, class, for, id, placeholder, type_)
+import Html.Events exposing (on)
 import Json.Decode as Decode
 import Ports
 import SvgAssets
+import Task
 
 
 type alias Model =
@@ -34,6 +37,17 @@ type KeyModifiers
 
 type Msg
     = GotParsed Decode.Value
+    | FileSelected File
+    | FileLoaded String
+
+
+onFileChange : (File -> msg) -> Attribute msg
+onFileChange tagger =
+    on "change"
+        (Decode.at [ "target", "files" ]
+            (Decode.index 0 File.decoder)
+            |> Decode.map tagger
+        )
 
 
 init : () -> ( Model, Cmd Msg )
@@ -46,6 +60,16 @@ update msg model =
     case msg of
         GotParsed _ ->
             ( model, Cmd.none )
+
+        FileSelected file ->
+            ( model
+            , Task.perform FileLoaded (File.toString file)
+            )
+
+        FileLoaded contents ->
+            ( { model | keyBinds = Parsing }
+            , Ports.sendConfig contents
+            )
 
 
 view : Model -> Html Msg
@@ -242,24 +266,30 @@ viewKeyBoard =
         ]
 
 
-viewUploadConfig : Html msg
+viewUploadConfig : Html Msg
 viewUploadConfig =
     aside [ class "lg:col-span-3 border-r border-zinc-800 bg-zinc-900/50 p-6 flex flex-col gap-6 overflow-y-auto" ]
         [ section []
             [ label [ class "text-xs font-bold uppercase tracking-widest text-zinc-500 mb-3 block" ]
                 [ text "Config Source" ]
-            , div [ class "border-2 border-dashed border-zinc-700 rounded-xl p-8 text-center hover:border-violet-500/50 transition-colors cursor-pointer bg-zinc-800/30" ]
-                [ SvgAssets.logo
-                , p [ class "text-sm text-zinc-400" ]
-                    [ text "Drop your "
-                    , code [ class "text-zinc-200" ]
-                        [ text "config.kdl " ]
-                    , text "here"
+            , div [ class "relative" ]
+                [ input
+                    [ type_ "file"
+                    , accept ".kdl"
+                    , class "absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    , onFileChange FileSelected
                     ]
-                ]
-            , div [ class "mt-4" ]
-                [ button [ class "w-full py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-lg font-medium transition-all shadow-lg shadow-violet-600/20" ]
-                    [ text "Parse Config                    " ]
+                    []
+                , div
+                    [ class "border-2 border-dashed border-zinc-700 rounded-xl p-8 text-center hover:border-violet-500/50 transition-colors cursor-pointer bg-zinc-800/30" ]
+                    [ SvgAssets.logo
+                    , p [ class "text-sm text-zinc-400" ]
+                        [ text "Drop your "
+                        , code [ class "text-zinc-200" ]
+                            [ text "config.kdl " ]
+                        , text "here or click to upload"
+                        ]
+                    ]
                 ]
             ]
         , hr [ class "border-zinc-800" ]
