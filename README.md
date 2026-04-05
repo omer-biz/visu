@@ -5,6 +5,9 @@ Visu is a tool for visualizing keyboard shortcuts for the
 `config.kdl` and displays an interactive keyboard layout to browse configured
 bindings.
 
+<video src="demo.mp4" controls="controls" style="max-width: 100%;">
+</video>
+
 ## Features
 
 - **Interactive Layout**: Physical keyboard visualization with modifier highlighting.
