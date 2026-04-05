@@ -15,7 +15,13 @@ import Task
 type alias Model =
     { keyBinds : KeyBinds
     , selectedKey : Maybe String
+    , viewMode : ViewMode
     }
+
+
+type ViewMode
+    = Physical
+    | ListView
 
 
 type KeyBinds
@@ -49,6 +55,7 @@ type Msg
     | FileSelected File
     | FileLoaded String
     | KeySelected String
+    | ChangeViewMode ViewMode
 
 
 onFileChange : (File -> msg) -> Attribute msg
@@ -62,7 +69,7 @@ onFileChange tagger =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { keyBinds = NotProvided, selectedKey = Nothing }, Cmd.none )
+    ( { keyBinds = NotProvided, selectedKey = Nothing, viewMode = Physical }, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -109,6 +116,9 @@ update msg model =
 
         KeySelected keyId ->
             ( { model | selectedKey = Just keyId }, Cmd.none )
+
+        ChangeViewMode mode ->
+            ( { model | viewMode = mode }, Cmd.none )
 
 
 type Response
@@ -233,17 +243,58 @@ viewKeyBoard model =
                         [ text (String.fromInt activeBindingsCount ++ " active bindings detected") ]
                     ]
                 , div [ class "flex bg-zinc-900 p-1 rounded-lg border border-zinc-800" ]
-                    [ button [ class "px-4 py-1.5 text-xs font-medium bg-zinc-800 rounded-md shadow-sm" ]
+                    [ button
+                        [ class (if model.viewMode == Physical then "px-4 py-1.5 text-xs font-medium bg-zinc-800 rounded-md shadow-sm" else "px-4 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-colors")
+                        , Html.Events.onClick (ChangeViewMode Physical)
+                        ]
                         [ text "Physical" ]
-                    , button [ class "px-4 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-colors" ]
+                    , button
+                        [ class (if model.viewMode == ListView then "px-4 py-1.5 text-xs font-medium bg-zinc-800 rounded-md shadow-sm" else "px-4 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-colors")
+                        , Html.Events.onClick (ChangeViewMode ListView)
+                        ]
                         [ text "List View" ]
                     ]
                 ]
-            , div [ class "kb-grid p-4 bg-zinc-900 rounded-2xl border border-zinc-800 shadow-2xl" ]
-                (List.map (viewKey model) keyboardLayout)
-            , viewLegend
+            , if model.viewMode == Physical then
+                div [ class "kb-grid p-4 bg-zinc-900 rounded-2xl border border-zinc-800 shadow-2xl" ]
+                    (List.map (viewKey model) keyboardLayout)
+
+              else
+                viewList model
+            , if model.viewMode == Physical then
+                viewLegend
+
+              else
+                text ""
             ]
         ]
+
+
+viewList : Model -> Html Msg
+viewList model =
+    case model.keyBinds of
+        Parsed dict ->
+            let
+                allBindings =
+                    Dict.values dict |> List.concat
+
+                activeBindingsCount =
+                    List.length allBindings
+            in
+            if activeBindingsCount == 0 then
+                div [ class "w-full p-12 text-center border border-dashed border-zinc-800 rounded-2xl opacity-50 bg-zinc-900" ]
+                    [ p [ class "text-zinc-400 text-sm font-medium" ] [ text "No bindings available." ] ]
+
+            else
+                div [ class "w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto p-4 bg-zinc-900 rounded-2xl border border-zinc-800 shadow-2xl custom-scrollbar" ]
+                    (List.map (\binding -> 
+                        div [ Html.Events.onClick (KeySelected binding.key), class "cursor-pointer transition-transform hover:-translate-y-0.5" ]
+                            [ viewBindingDetail binding ]
+                    ) allBindings)
+
+        _ ->
+            div [ class "w-full p-12 text-center border border-dashed border-zinc-800 rounded-2xl opacity-50 bg-zinc-900" ]
+                [ p [ class "text-zinc-400 text-sm font-medium" ] [ text "Upload a config to see bindings." ] ]
 
 
 type alias KeyDef =
