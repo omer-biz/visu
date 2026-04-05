@@ -13,32 +13,42 @@ import Task
 
 
 type alias Model =
-    { keyBinds : KeyBinds }
+    { keyBinds : KeyBinds
+    , selectedKey : Maybe String
+    }
 
 
 type KeyBinds
     = NotProvided
-    | ErrorParsing ()
+    | ErrorParsing String
     | Parsing
-    | Parsed (Dict String KeyInfo)
+    | Parsed (Dict String (List Binding))
 
 
-type alias KeyInfo =
-    { modifiers : List KeyModifiers
-    , action : String
+type alias Binding =
+    { key : String
+    , modifiers : List KeyModifier
+    , actions : List String
+    , options : Dict String String
     }
 
 
-type KeyModifiers
+type KeyModifier
     = Ctrl
     | Shift
     | Super
+    | Alt
+    | Mod
+    | Win
+    | Control
+    | Other String
 
 
 type Msg
     = GotParsed Decode.Value
     | FileSelected File
     | FileLoaded String
+    | KeySelected String
 
 
 onFileChange : (File -> msg) -> Attribute msg
@@ -52,14 +62,40 @@ onFileChange tagger =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { keyBinds = NotProvided }, Cmd.none )
+    ( { keyBinds = NotProvided, selectedKey = Nothing }, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        GotParsed _ ->
-            ( model, Cmd.none )
+        GotParsed value ->
+            case Decode.decodeValue responseDecoder value of
+                Ok (Success bindings) ->
+                    let
+                        grouped =
+                            List.foldl
+                                (\b acc ->
+                                    Dict.update b.key
+                                        (\maybeList ->
+                                            case maybeList of
+                                                Just list ->
+                                                    Just (list ++ [ b ])
+
+                                                Nothing ->
+                                                    Just [ b ]
+                                        )
+                                        acc
+                                )
+                                Dict.empty
+                                bindings
+                    in
+                    ( { model | keyBinds = Parsed grouped }, Cmd.none )
+
+                Ok (Error err) ->
+                    ( { model | keyBinds = ErrorParsing err }, Cmd.none )
+
+                Err err ->
+                    ( { model | keyBinds = ErrorParsing (Decode.errorToString err) }, Cmd.none )
 
         FileSelected file ->
             ( model
@@ -71,25 +107,122 @@ update msg model =
             , Ports.sendConfig contents
             )
 
+        KeySelected keyId ->
+            ( { model | selectedKey = Just keyId }, Cmd.none )
+
+
+type Response
+    = Success (List Binding)
+    | Error String
+
+
+responseDecoder : Decode.Decoder Response
+responseDecoder =
+    Decode.field "type" Decode.string
+        |> Decode.andThen
+            (\t ->
+                case t of
+                    "SUCCESS" ->
+                        Decode.field "data" (Decode.list bindingDecoder)
+                            |> Decode.map Success
+
+                    "ERROR" ->
+                        Decode.field "error" Decode.string
+                            |> Decode.map Error
+
+                    _ ->
+                        Decode.fail ("Unknown response type: " ++ t)
+            )
+
+
+bindingDecoder : Decode.Decoder Binding
+bindingDecoder =
+    Decode.map4 Binding
+        (Decode.field "key" Decode.string)
+        (Decode.field "modifiers" (Decode.list modifierDecoder))
+        (Decode.field "actions" (Decode.list Decode.string))
+        (Decode.field "options" (Decode.list optionDecoder |> Decode.map Dict.fromList))
+
+
+optionDecoder : Decode.Decoder ( String, String )
+optionDecoder =
+    Decode.map2 (\k v -> ( k, v ))
+        (Decode.index 0 Decode.string)
+        (Decode.index 1 Decode.string)
+
+
+modifierDecoder : Decode.Decoder KeyModifier
+modifierDecoder =
+    Decode.string
+        |> Decode.map
+            (\s ->
+                case String.toLower s of
+                    "ctrl" ->
+                        Ctrl
+
+                    "control" ->
+                        Control
+
+                    "shift" ->
+                        Shift
+
+                    "super" ->
+                        Super
+
+                    "alt" ->
+                        Alt
+
+                    "mod" ->
+                        Mod
+
+                    "win" ->
+                        Win
+
+                    _ ->
+                        Other s
+            )
+
 
 view : Model -> Html Msg
-view _ =
+view model =
+    let
+        activeBindings =
+            case model.keyBinds of
+                Parsed dict ->
+                    Dict.size dict
+
+                _ ->
+                    0
+    in
     main_ [ class "flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden" ]
         [ viewUploadConfig
-        , viewKeyBoard
-        , viewKeyMapInfo
-        , div [ class "fixed bottom-10 left-1/2 -translate-x-1/2 bg-zinc-800 border border-zinc-700 px-4 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-bounce" ]
-            [ div [ class "bg-green-500/20 text-green-500 p-1 rounded-full" ]
-                [ SvgAssets.checkMark
+        , viewKeyBoard model
+        , viewKeyMapInfo model
+        , if activeBindings > 0 then
+            div [ class "fixed bottom-10 left-1/2 -translate-x-1/2 bg-zinc-800 border border-zinc-700 px-4 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-bounce" ]
+                [ div [ class "bg-green-500/20 text-green-500 p-1 rounded-full" ]
+                    [ SvgAssets.checkMark
+                    ]
+                , span [ class "text-sm font-medium" ]
+                    [ text ("Parsed " ++ String.fromInt activeBindings ++ " keybindings from config") ]
                 ]
-            , span [ class "text-sm font-medium" ]
-                [ text "Parsed 42 keybindings from config.kdl" ]
-            ]
+
+          else
+            text ""
         ]
 
 
-viewKeyBoard : Html msg
-viewKeyBoard =
+viewKeyBoard : Model -> Html Msg
+viewKeyBoard model =
+    let
+        activeBindingsCount =
+            case model.keyBinds of
+                Parsed dict ->
+                    Dict.size dict
+
+                _ ->
+                    0
+    in
     section [ class "lg:col-span-6 bg-zinc-950 p-8 overflow-x-auto flex flex-col items-center justify-start" ]
         [ div [ class "w-full max-w-4xl" ]
             [ div [ class "flex justify-between items-center mb-8" ]
@@ -97,7 +230,7 @@ viewKeyBoard =
                     [ h2 [ class "text-xl font-semibold" ]
                         [ text "Workspace View" ]
                     , p [ class "text-zinc-500 text-sm" ]
-                        [ text "42 active bindings detected" ]
+                        [ text (String.fromInt activeBindingsCount ++ " active bindings detected") ]
                     ]
                 , div [ class "flex bg-zinc-900 p-1 rounded-lg border border-zinc-800" ]
                     [ button [ class "px-4 py-1.5 text-xs font-medium bg-zinc-800 rounded-md shadow-sm" ]
@@ -107,161 +240,227 @@ viewKeyBoard =
                     ]
                 ]
             , div [ class "kb-grid p-4 bg-zinc-900 rounded-2xl border border-zinc-800 shadow-2xl" ]
-                [ button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex flex-col items-center justify-center hover:bg-zinc-700 transition-all group relative" ]
-                    [ span [ class "text-[10px] text-zinc-500 font-bold group-hover:text-zinc-300 uppercase" ]
-                        [ text "Esc" ]
-                    ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:-translate-y-0.5 transition-all" ]
-                    [ text "1" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:-translate-y-0.5 transition-all" ]
-                    [ text "2" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-violet-500/20 border border-violet-500/50 ring-2 ring-violet-500/20 flex flex-col items-center justify-center hover:-translate-y-0.5 transition-all relative" ]
-                    [ span [ class "absolute top-1 left-1.5 text-[8px] font-bold text-violet-400" ]
-                        [ text "SUP" ]
-                    , span [ class "text-sm font-semibold" ]
-                        [ text "3" ]
-                    , span [ class "absolute bottom-1 right-1.5 bg-violet-500 text-white text-[8px] px-1 rounded-full" ]
-                        [ text "2" ]
-                    ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:-translate-y-0.5 transition-all" ]
-                    [ text "4" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:-translate-y-0.5 transition-all" ]
-                    [ text "5" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:-translate-y-0.5 transition-all" ]
-                    [ text "6" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:-translate-y-0.5 transition-all" ]
-                    [ text "7" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:-translate-y-0.5 transition-all" ]
-                    [ text "8" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:-translate-y-0.5 transition-all" ]
-                    [ text "9" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:-translate-y-0.5 transition-all" ]
-                    [ text "0" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:-translate-y-0.5 transition-all" ]
-                    [ text "-" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:-translate-y-0.5 transition-all" ]
-                    [ text "=" ]
-                , button [ class "col-span-8 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:-translate-y-0.5 transition-all text-xs text-zinc-500 uppercase font-bold" ]
-                    [ text "Backspace" ]
-                , button [ class "col-span-6 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-500 uppercase font-bold" ]
-                    [ text "Tab" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "Q" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "W" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "E" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "R" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "T" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "Y" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "U" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "I" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "O" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "P" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "[" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "]" ]
-                , button [ class "col-span-6 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "\\" ]
-                , button [ class "col-span-7 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-500 uppercase font-bold" ]
-                    [ text "Caps" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "A" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "S" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "D" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "F" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "G" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-violet-500/20 border border-violet-500 ring-4 ring-violet-500/30 flex flex-col items-center justify-center relative scale-105 z-10 shadow-2xl" ]
-                    [ span [ class "absolute top-1 left-1.5 text-[8px] font-bold text-violet-400" ]
-                        [ text "SUP" ]
-                    , span [ class "text-sm font-semibold" ]
-                        [ text "H" ]
-                    , span [ class "absolute bottom-1 right-1.5 bg-violet-500 text-white text-[8px] px-1 rounded-full" ]
-                        [ text "1" ]
-                    ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "J" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "K" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "L" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text ";" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "'" ]
-                , button [ class "col-span-9 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-500 uppercase font-bold" ]
-                    [ text "Enter" ]
-                , button [ class "col-span-9 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-500 uppercase font-bold" ]
-                    [ text "Shift" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "Z" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "X" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "C" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "V" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "B" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "N" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "M" ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "," ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "." ]
-                , button [ class "col-span-4 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
-                    [ text "/" ]
-                , button [ class "col-span-11 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-500 uppercase font-bold" ]
-                    [ text "Shift" ]
-                , button [ class "col-span-6 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-500 font-bold" ]
-                    [ text "Ctrl" ]
-                , button [ class "col-span-6 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-500 font-bold" ]
-                    [ text "Super" ]
-                , button [ class "col-span-6 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-500 font-bold" ]
-                    [ text "Alt" ]
-                , button [ class "col-span-24 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-semibold" ]
+                (List.map (viewKey model) keyboardLayout)
+            , viewLegend
+            ]
+        ]
+
+
+type alias KeyDef =
+    { id : String
+    , label : String
+    , span : Int
+    }
+
+
+keyboardLayout : List KeyDef
+keyboardLayout =
+    [ -- Row 1
+      { id = "Escape", label = "Esc", span = 4 }
+    , { id = "1", label = "1", span = 4 }
+    , { id = "2", label = "2", span = 4 }
+    , { id = "3", label = "3", span = 4 }
+    , { id = "4", label = "4", span = 4 }
+    , { id = "5", label = "5", span = 4 }
+    , { id = "6", label = "6", span = 4 }
+    , { id = "7", label = "7", span = 4 }
+    , { id = "8", label = "8", span = 4 }
+    , { id = "9", label = "9", span = 4 }
+    , { id = "0", label = "0", span = 4 }
+    , { id = "Minus", label = "-", span = 4 }
+    , { id = "Equal", label = "=", span = 4 }
+    , { id = "Backspace", label = "Backspace", span = 8 }
+
+    -- Row 2
+    , { id = "Tab", label = "Tab", span = 6 }
+    , { id = "q", label = "Q", span = 4 }
+    , { id = "w", label = "W", span = 4 }
+    , { id = "e", label = "E", span = 4 }
+    , { id = "r", label = "R", span = 4 }
+    , { id = "t", label = "T", span = 4 }
+    , { id = "y", label = "Y", span = 4 }
+    , { id = "u", label = "U", span = 4 }
+    , { id = "i", label = "I", span = 4 }
+    , { id = "o", label = "O", span = 4 }
+    , { id = "p", label = "P", span = 4 }
+    , { id = "BracketLeft", label = "[", span = 4 }
+    , { id = "BracketRight", label = "]", span = 4 }
+    , { id = "Backslash", label = "\\", span = 6 }
+
+    -- Row 3
+    , { id = "CapsLock", label = "Caps", span = 7 }
+    , { id = "a", label = "A", span = 4 }
+    , { id = "s", label = "S", span = 4 }
+    , { id = "d", label = "D", span = 4 }
+    , { id = "f", label = "F", span = 4 }
+    , { id = "g", label = "G", span = 4 }
+    , { id = "h", label = "H", span = 4 }
+    , { id = "j", label = "J", span = 4 }
+    , { id = "k", label = "K", span = 4 }
+    , { id = "l", label = "L", span = 4 }
+    , { id = "Semicolon", label = ";", span = 4 }
+    , { id = "Quote", label = "'", span = 4 }
+    , { id = "Return", label = "Enter", span = 9 }
+
+    -- Row 4
+    , { id = "ShiftLeft", label = "Shift", span = 9 }
+    , { id = "z", label = "Z", span = 4 }
+    , { id = "x", label = "X", span = 4 }
+    , { id = "c", label = "C", span = 4 }
+    , { id = "v", label = "V", span = 4 }
+    , { id = "b", label = "B", span = 4 }
+    , { id = "n", label = "N", span = 4 }
+    , { id = "m", label = "M", span = 4 }
+    , { id = "Comma", label = ",", span = 4 }
+    , { id = "Period", label = ".", span = 4 }
+    , { id = "Slash", label = "/", span = 4 }
+    , { id = "ShiftRight", label = "Shift", span = 11 }
+
+    -- Row 5
+    , { id = "ControlLeft", label = "Ctrl", span = 6 }
+    , { id = "SuperLeft", label = "Super", span = 6 }
+    , { id = "AltLeft", label = "Alt", span = 6 }
+    , { id = "Space", label = "", span = 24 }
+    , { id = "AltRight", label = "Alt", span = 6 }
+    , { id = "SuperRight", label = "Super", span = 6 }
+    , { id = "ControlRight", label = "Ctrl", span = 6 }
+    ]
+
+
+viewKey : Model -> KeyDef -> Html Msg
+viewKey model keyDef =
+    let
+        bindings =
+            case model.keyBinds of
+                Parsed dict ->
+                    Dict.get keyDef.id dict |> Maybe.withDefault []
+
+                _ ->
                     []
-                , button [ class "col-span-6 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-500 font-bold" ]
-                    [ text "Alt" ]
-                , button [ class "col-span-6 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-500 font-bold" ]
-                    [ text "Super" ]
-                , button [ class "col-span-6 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-500 font-bold" ]
-                    [ text "Ctrl" ]
-                ]
-            , div [ class "mt-12 flex flex-wrap gap-6 justify-center opacity-60" ]
-                [ div [ class "flex items-center gap-2 text-xs" ]
-                    [ div [ class "w-3 h-3 rounded-sm bg-violet-500" ]
-                        []
-                    , span []
-                        [ text "Active Binding" ]
-                    ]
-                , div [ class "flex items-center gap-2 text-xs" ]
-                    [ div [ class "w-3 h-3 rounded-sm bg-zinc-800 border border-zinc-700" ]
-                        []
-                    , span []
-                        [ text "Unbound" ]
-                    ]
-                , div [ class "flex items-center gap-2 text-xs" ]
-                    [ div [ class "w-3 h-3 rounded-sm border-2 border-violet-500 shadow-[0_0_8px_rgba(139,92,246,0.5)]" ]
-                        []
-                    , span []
-                        [ text "Selected" ]
-                    ]
-                ]
+
+        isBound =
+            not (List.isEmpty bindings)
+
+        isSelected =
+            model.selectedKey == Just keyDef.id
+
+        baseClasses =
+            getSpanClass keyDef.span ++ " h-12 rounded-lg border transition-all flex flex-col items-center justify-center relative "
+
+        stateClasses =
+            if isSelected then
+                "bg-violet-500/30 border-violet-500 ring-4 ring-violet-500/30 z-10 scale-105 shadow-2xl"
+
+            else if isBound then
+                "bg-violet-500/20 border-violet-500/50 hover:bg-violet-500/30 hover:-translate-y-0.5"
+
+            else
+                "bg-zinc-800 border-zinc-700 hover:bg-zinc-700 hover:-translate-y-0.5"
+
+        mainModifier =
+            bindings
+                |> List.head
+                |> Maybe.andThen (\b -> List.head b.modifiers)
+                |> Maybe.map modifierToString
+                |> Maybe.withDefault ""
+    in
+    button
+        [ class (baseClasses ++ stateClasses)
+        , Html.Events.onClick (KeySelected keyDef.id)
+        ]
+        [ if isBound && mainModifier /= "" then
+            span [ class "absolute top-1 left-1.5 text-[8px] font-bold text-violet-400" ]
+                [ text mainModifier ]
+
+          else
+            text ""
+        , span [ class "text-sm font-semibold" ]
+            [ text keyDef.label ]
+        , if List.length bindings > 1 then
+            span [ class "absolute bottom-1 right-1.5 bg-violet-500 text-white text-[8px] px-1 rounded-full" ]
+                [ text (String.fromInt (List.length bindings)) ]
+
+          else
+            text ""
+        ]
+
+
+getSpanClass : Int -> String
+getSpanClass span =
+    case span of
+        4 ->
+            "col-span-4"
+
+        6 ->
+            "col-span-6"
+
+        7 ->
+            "col-span-7"
+
+        8 ->
+            "col-span-8"
+
+        9 ->
+            "col-span-9"
+
+        11 ->
+            "col-span-11"
+
+        24 ->
+            "col-span-24"
+
+        _ ->
+            "col-span-" ++ String.fromInt span
+
+
+modifierToString : KeyModifier -> String
+modifierToString mod =
+    case mod of
+        Ctrl ->
+            "CTRL"
+
+        Shift ->
+            "SHFT"
+
+        Super ->
+            "SUP"
+
+        Alt ->
+            "ALT"
+
+        Mod ->
+            "MOD"
+
+        Win ->
+            "WIN"
+
+        Control ->
+            "CTRL"
+
+        Other s ->
+            String.toUpper s
+
+
+viewLegend : Html msg
+viewLegend =
+    div [ class "mt-12 flex flex-wrap gap-6 justify-center opacity-60" ]
+        [ div [ class "flex items-center gap-2 text-xs" ]
+            [ div [ class "w-3 h-3 rounded-sm bg-violet-500" ]
+                []
+            , span []
+                [ text "Active Binding" ]
+            ]
+        , div [ class "flex items-center gap-2 text-xs" ]
+            [ div [ class "w-3 h-3 rounded-sm bg-zinc-800 border border-zinc-700" ]
+                []
+            , span []
+                [ text "Unbound" ]
+            ]
+        , div [ class "flex items-center gap-2 text-xs" ]
+            [ div [ class "w-3 h-3 rounded-sm border-2 border-violet-500 shadow-[0_0_8px_rgba(139,92,246,0.5)]" ]
+                []
+            , span []
+                [ text "Selected" ]
             ]
         ]
 
@@ -327,52 +526,46 @@ viewUploadConfig =
         ]
 
 
-viewKeyMapInfo : Html msg
-viewKeyMapInfo =
+viewKeyMapInfo : Model -> Html msg
+viewKeyMapInfo model =
+    let
+        selectedId =
+            model.selectedKey |> Maybe.withDefault ""
+
+        bindings =
+            case model.keyBinds of
+                Parsed dict ->
+                    Dict.get selectedId dict |> Maybe.withDefault []
+
+                _ ->
+                    []
+
+        bindingCount =
+            List.length bindings
+    in
     aside [ class "lg:col-span-3 border-l border-zinc-800 bg-zinc-900/50 p-6 overflow-y-auto" ]
         [ div [ class "flex items-end justify-between mb-8" ]
             [ div []
-                [ h3 [ class "text-4xl font-black text-white" ]
-                    [ text "H" ]
+                [ h3 [ class "text-4xl font-black text-white uppercase" ]
+                    [ text (if selectedId == "" then "-" else selectedId) ]
                 , p [ class "text-zinc-500 text-sm font-medium" ]
-                    [ text "1 Binding Found" ]
+                    [ text (String.fromInt bindingCount ++ " Binding" ++ (if bindingCount == 1 then "" else "s") ++ " Found") ]
                 ]
             , button [ class "text-zinc-500 hover:text-white mb-1" ]
                 [ SvgAssets.clipboard
                 ]
             ]
         , div [ class "space-y-4" ]
-            [ div [ class "bg-zinc-800/80 border border-zinc-700 p-4 rounded-xl space-y-3 group hover:border-violet-500/50 transition-colors" ]
-                [ div [ class "flex items-center gap-1.5 flex-wrap" ]
-                    [ span [ class "px-1.5 py-0.5 bg-zinc-700 text-zinc-300 rounded text-[10px] font-bold mono" ]
-                        [ text "Super" ]
-                    , span [ class "text-zinc-500 text-xs" ]
-                        [ text "+" ]
-                    , span [ class "px-1.5 py-0.5 bg-zinc-700 text-zinc-300 rounded text-[10px] font-bold mono" ]
-                        [ text "Shift" ]
-                    , span [ class "text-zinc-500 text-xs" ]
-                        [ text "+" ]
-                    , span [ class "px-1.5 py-0.5 bg-violet-500/20 text-violet-300 border border-violet-500/30 rounded text-[10px] font-bold mono" ]
-                        [ text "H" ]
-                    ]
-                , div [ class "flex flex-col" ]
-                    [ span [ class "text-xs text-zinc-500 font-semibold uppercase tracking-wider mb-1" ]
-                        [ text "Action" ]
-                    , span [ class "mono text-sm text-violet-400" ]
-                        [ text "focus-column-left" ]
-                    ]
-                , div [ class "pt-2 flex justify-between items-center border-t border-zinc-700/50" ]
-                    [ span [ class "text-[10px] text-zinc-500 italic" ]
-                        [ text "Default Layer" ]
-                    , button [ class "opacity-0 group-hover:opacity-100 transition-opacity text-xs text-violet-500 font-medium" ]
-                        [ text "Edit Bind" ]
+            (if List.isEmpty bindings then
+                [ div [ class "p-8 text-center border border-dashed border-zinc-800 rounded-xl opacity-40" ]
+                    [ p [ class "text-xs" ]
+                        [ text "No bindings for this key." ]
                     ]
                 ]
-            , div [ class "p-8 text-center border border-dashed border-zinc-800 rounded-xl opacity-40" ]
-                [ p [ class "text-xs" ]
-                    [ text "No other bindings for this key." ]
-                ]
-            ]
+
+             else
+                List.map viewBindingDetail bindings
+            )
         , div [ class "mt-12 bg-zinc-800/30 border border-zinc-800 rounded-xl p-4" ]
             [ h4 [ class "text-xs font-bold text-zinc-400 mb-4 uppercase tracking-widest" ]
                 [ text "Global Filter" ]
@@ -383,6 +576,45 @@ viewKeyMapInfo =
                 ]
             ]
         ]
+
+
+viewBindingDetail : Binding -> Html msg
+viewBindingDetail binding =
+    div [ class "bg-zinc-800/80 border border-zinc-700 p-4 rounded-xl space-y-3 group hover:border-violet-500/50 transition-colors" ]
+        [ div [ class "flex items-center gap-1.5 flex-wrap" ]
+            (List.intersperse (span [ class "text-zinc-500 text-xs" ] [ text "+" ])
+                (List.map viewModifierBadge binding.modifiers
+                    ++ [ span [ class "px-1.5 py-0.5 bg-violet-500/20 text-violet-300 border border-violet-500/30 rounded text-[10px] font-bold mono uppercase" ]
+                            [ text binding.key ]
+                       ]
+                )
+            )
+        , div [ class "flex flex-col" ]
+            [ span [ class "text-xs text-zinc-500 font-semibold uppercase tracking-wider mb-1" ]
+                [ text "Actions" ]
+            , div [ class "space-y-1" ]
+                (List.map (\action -> span [ class "mono text-sm text-violet-400 block" ] [ text action ]) binding.actions)
+            ]
+        , if not (Dict.isEmpty binding.options) then
+            div [ class "flex flex-col pt-2 border-t border-zinc-700/50" ]
+                [ span [ class "text-[10px] text-zinc-500 font-semibold uppercase tracking-wider mb-1" ]
+                    [ text "Options" ]
+                , div [ class "space-y-1" ]
+                    (binding.options
+                        |> Dict.toList
+                        |> List.map (\( k, v ) -> div [ class "text-[10px] text-zinc-400 flex justify-between" ] [ span [] [ text k ], span [ class "italic text-zinc-500" ] [ text v ] ])
+                    )
+                ]
+
+          else
+            text ""
+        ]
+
+
+viewModifierBadge : KeyModifier -> Html msg
+viewModifierBadge mod =
+    span [ class "px-1.5 py-0.5 bg-zinc-700 text-zinc-300 rounded text-[10px] font-bold mono uppercase" ]
+        [ text (modifierToString mod) ]
 
 
 subscriptions : Model -> Sub Msg
