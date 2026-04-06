@@ -20,6 +20,7 @@ pub enum Modifier {
     Super,
     Win,
     Shift,
+    Mod3,
 }
 
 #[wasm_bindgen]
@@ -104,6 +105,7 @@ fn map_modifier(m: &str) -> Option<Modifier> {
         "ctrl" => Some(Modifier::Ctrl),
         "control" => Some(Modifier::Control),
         "mod" => Some(Modifier::Mod),
+        "mod3" => Some(Modifier::Mod3),
         "alt" => Some(Modifier::Alt),
         "super" => Some(Modifier::Super),
         "win" => Some(Modifier::Win),

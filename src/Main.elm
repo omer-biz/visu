@@ -46,6 +46,7 @@ type KeyModifier
     | Super
     | Alt
     | Mod
+    | Mod3
     | Win
     | Control
     | Other String
@@ -193,6 +194,9 @@ modifierDecoder =
                     "win" ->
                         Win
 
+                    "mod3" ->
+                        Mod3
+
                     _ ->
                         Other s
             )
@@ -249,12 +253,24 @@ viewKeyBoard model =
                     ]
                 , div [ class "flex bg-zinc-900 p-1 rounded-lg border border-zinc-800" ]
                     [ button
-                        [ class (if model.viewMode == Physical then "px-4 py-1.5 text-xs font-medium bg-zinc-800 rounded-md shadow-sm" else "px-4 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-colors")
+                        [ class
+                            (if model.viewMode == Physical then
+                                "px-4 py-1.5 text-xs font-medium bg-zinc-800 rounded-md shadow-sm"
+
+                             else
+                                "px-4 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-colors"
+                            )
                         , Html.Events.onClick (ChangeViewMode Physical)
                         ]
                         [ text "Physical" ]
                     , button
-                        [ class (if model.viewMode == ListView then "px-4 py-1.5 text-xs font-medium bg-zinc-800 rounded-md shadow-sm" else "px-4 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-colors")
+                        [ class
+                            (if model.viewMode == ListView then
+                                "px-4 py-1.5 text-xs font-medium bg-zinc-800 rounded-md shadow-sm"
+
+                             else
+                                "px-4 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-colors"
+                            )
                         , Html.Events.onClick (ChangeViewMode ListView)
                         ]
                         [ text "List View" ]
@@ -294,10 +310,13 @@ viewList model =
 
             else
                 div [ class "w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto p-4 bg-zinc-900 rounded-2xl border border-zinc-800 shadow-2xl custom-scrollbar" ]
-                    (List.map (\binding -> 
-                        div [ Html.Events.onClick (KeySelected binding.key), class "cursor-pointer transition-transform hover:-translate-y-0.5" ]
-                            [ viewBindingDetail binding ]
-                    ) allBindings)
+                    (List.map
+                        (\binding ->
+                            div [ Html.Events.onClick (KeySelected binding.key), class "cursor-pointer transition-transform hover:-translate-y-0.5" ]
+                                [ viewBindingDetail binding ]
+                        )
+                        allBindings
+                    )
 
         _ ->
             div [ class "w-full p-12 text-center border border-dashed border-zinc-800 rounded-2xl opacity-50 bg-zinc-900" ]
@@ -482,7 +501,8 @@ matchesSearch query binding =
 
     else
         let
-            q = String.toLower query
+            q =
+                String.toLower query
 
             matchesAction =
                 List.any (\action -> String.contains q (String.toLower action)) binding.actions
@@ -516,6 +536,9 @@ modifierToString mod =
 
         Control ->
             "CTRL"
+
+        Mod3 ->
+            "Mod3"
 
         Other s ->
             String.toUpper s
