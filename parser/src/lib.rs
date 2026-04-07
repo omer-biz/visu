@@ -21,6 +21,11 @@ pub enum Modifier {
     Win,
     Shift,
     Mod3,
+    Mod5,
+    #[serde(rename = "ISO_Level3_Shift")]
+    ISOLevel3Shift,
+    #[serde(rename = "ISO_Level5_Shift")]
+    ISOLevel5Shift,
 }
 
 #[wasm_bindgen]
@@ -110,6 +115,9 @@ fn map_modifier(m: &str) -> Option<Modifier> {
         "super" => Some(Modifier::Super),
         "win" => Some(Modifier::Win),
         "shift" => Some(Modifier::Shift),
+        "mod5" => Some(Modifier::Mod5),
+        "iso_level3_shift" => Some(Modifier::ISOLevel3Shift),
+        "iso_level5_shift" => Some(Modifier::ISOLevel5Shift),
         _ => None,
     }
 }
