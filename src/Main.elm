@@ -8,6 +8,7 @@ import Html.Attributes exposing (accept, class, placeholder, type_)
 import Html.Events exposing (on)
 import Json.Decode as Decode
 import Ports
+import Set exposing (Set)
 import SvgAssets
 import Task
 
@@ -29,7 +30,13 @@ type KeyBinds
     = NotProvided
     | ErrorParsing String
     | Parsing
-    | Parsed (Dict String (List Binding))
+    | Parsed ParsedData
+
+
+type alias ParsedData =
+    { files : Dict String (List Binding)
+    , selectedFiles : Set String
+    }
 
 
 type alias Binding =
@@ -59,6 +66,8 @@ type Msg
     | KeySelected String
     | ChangeViewMode ViewMode
     | UpdateSearchQuery String
+    | ToggleFile String Bool
+    | ToggleAllFiles Bool
 
 
 onFileChange : (File -> msg) -> Attribute msg
@@ -80,26 +89,15 @@ update msg model =
     case msg of
         GotParsed value ->
             case Decode.decodeValue responseDecoder value of
-                Ok (Success bindings) ->
+                Ok (Success filesDict) ->
                     let
-                        grouped =
-                            List.foldl
-                                (\b acc ->
-                                    Dict.update b.key
-                                        (\maybeList ->
-                                            case maybeList of
-                                                Just list ->
-                                                    Just (list ++ [ b ])
-
-                                                Nothing ->
-                                                    Just [ b ]
-                                        )
-                                        acc
-                                )
-                                Dict.empty
-                                bindings
+                        allFiles =
+                            Dict.keys filesDict |> Set.fromList
                     in
-                    ( { model | keyBinds = Parsed grouped }, Cmd.none )
+                    ( { model | keyBinds = Parsed { files = filesDict, selectedFiles = allFiles } }, Cmd.none )
+
+                Ok ParsingState ->
+                    ( { model | keyBinds = Parsing }, Cmd.none )
 
                 Ok (Error err) ->
                     ( { model | keyBinds = ErrorParsing err }, Cmd.none )
@@ -126,10 +124,43 @@ update msg model =
         UpdateSearchQuery query ->
             ( { model | searchQuery = query }, Cmd.none )
 
+        ToggleFile filename isChecked ->
+            case model.keyBinds of
+                Parsed data ->
+                    let
+                        newSelected =
+                            if isChecked then
+                                Set.insert filename data.selectedFiles
+
+                            else
+                                Set.remove filename data.selectedFiles
+                    in
+                    ( { model | keyBinds = Parsed { data | selectedFiles = newSelected } }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        ToggleAllFiles isChecked ->
+            case model.keyBinds of
+                Parsed data ->
+                    let
+                        newSelected =
+                            if isChecked then
+                                Dict.keys data.files |> Set.fromList
+
+                            else
+                                Set.empty
+                    in
+                    ( { model | keyBinds = Parsed { data | selectedFiles = newSelected } }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
 
 type Response
-    = Success (List Binding)
+    = Success (Dict String (List Binding))
     | Error String
+    | ParsingState
 
 
 responseDecoder : Decode.Decoder Response
@@ -139,12 +170,15 @@ responseDecoder =
             (\t ->
                 case t of
                     "SUCCESS" ->
-                        Decode.field "data" (Decode.list bindingDecoder)
+                        Decode.field "data" (Decode.dict (Decode.list bindingDecoder))
                             |> Decode.map Success
 
                     "ERROR" ->
                         Decode.field "error" Decode.string
                             |> Decode.map Error
+
+                    "PARSING_STATE" ->
+                        Decode.succeed ParsingState
 
                     _ ->
                         Decode.fail ("Unknown response type: " ++ t)
@@ -227,14 +261,15 @@ view model =
                         [ text err ]
                     ]
 
-            Parsed dict ->
-                if Dict.size dict > 0 then
+            Parsed data ->
+                if Dict.size data.files > 0 then
                     div [ class "fixed bottom-10 left-1/2 -translate-x-1/2 bg-zinc-800 border border-zinc-700 px-4 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-bounce z-50" ]
                         [ div [ class "bg-green-500/20 text-green-500 p-1 rounded-full" ]
                             [ SvgAssets.checkMark ]
                         , span [ class "text-sm font-medium" ]
-                            [ text ("Parsed " ++ String.fromInt (Dict.size dict) ++ " keybindings from config") ]
+                            [ text ("Parsed " ++ String.fromInt (Dict.size data.files) ++ " files from config") ]
                         ]
+
                 else
                     text ""
 
@@ -243,13 +278,35 @@ view model =
         ]
 
 
+getActiveBindings : ParsedData -> Dict String (List Binding)
+getActiveBindings data =
+    let
+        groupByKey b acc =
+            Dict.update b.key
+                (\maybeList ->
+                    case maybeList of
+                        Just list ->
+                            Just (list ++ [ b ])
+
+                        Nothing ->
+                            Just [ b ]
+                )
+                acc
+    in
+    data.files
+        |> Dict.filter (\filename _ -> Set.member filename data.selectedFiles)
+        |> Dict.values
+        |> List.concat
+        |> List.foldl groupByKey Dict.empty
+
+
 viewKeyBoard : Model -> Html Msg
 viewKeyBoard model =
     let
         activeBindingsCount =
             case model.keyBinds of
-                Parsed dict ->
-                    Dict.size dict
+                Parsed data ->
+                    Dict.size (getActiveBindings data)
 
                 _ ->
                     0
@@ -311,10 +368,11 @@ viewKeyBoard model =
 viewList : Model -> Html Msg
 viewList model =
     case model.keyBinds of
-        Parsed dict ->
+        Parsed data ->
             let
                 allBindings =
-                    Dict.values dict
+                    getActiveBindings data
+                        |> Dict.values
                         |> List.concat
                         |> List.filter (matchesSearch model.searchQuery)
 
@@ -338,13 +396,13 @@ viewList model =
         Parsing ->
             div [ class "w-full p-12 text-center border border-dashed border-blue-800/50 rounded-2xl bg-blue-900/10 flex flex-col items-center justify-center gap-4" ]
                 [ div [ class "text-blue-500" ] [ SvgAssets.spinner ]
-                , p [ class "text-blue-400 text-sm font-medium animate-pulse" ] [ text "Parsing config..." ] 
+                , p [ class "text-blue-400 text-sm font-medium animate-pulse" ] [ text "Parsing config..." ]
                 ]
 
         ErrorParsing _ ->
             div [ class "w-full p-12 text-center border border-dashed border-red-800/50 rounded-2xl bg-red-900/10 flex flex-col items-center justify-center gap-4" ]
                 [ div [ class "text-red-500" ] [ SvgAssets.alert ]
-                , p [ class "text-red-400 text-sm font-medium" ] [ text "Could not parse config. Please check the error below." ] 
+                , p [ class "text-red-400 text-sm font-medium" ] [ text "Could not parse config. Please check the error below." ]
                 ]
 
         NotProvided ->
@@ -440,8 +498,8 @@ viewKey model keyDef =
     let
         bindings =
             case model.keyBinds of
-                Parsed dict ->
-                    Dict.get keyDef.id dict
+                Parsed data ->
+                    Dict.get keyDef.id (getActiveBindings data)
                         |> Maybe.withDefault []
                         |> List.filter (matchesSearch model.searchQuery)
 
@@ -607,8 +665,10 @@ viewUploadConfig model =
                 [ input
                     [ type_ "file"
                     , accept ".kdl"
+                    , Html.Attributes.attribute "webkitdirectory" ""
+                    , Html.Attributes.attribute "multiple" ""
+                    , Html.Attributes.id "folder-upload"
                     , class "absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    , onFileChange FileSelected
                     , Html.Attributes.value ""
                     ]
                     []
@@ -618,7 +678,7 @@ viewUploadConfig model =
                     , p [ class "text-sm text-zinc-400" ]
                         [ text "Drop your "
                         , code [ class "text-zinc-200" ]
-                            [ text "config.kdl " ]
+                            [ text "niri config folder or your config.kdl " ]
                         , text "here or click to upload"
                         ]
                     ]
@@ -641,6 +701,57 @@ viewUploadConfig model =
                 , SvgAssets.search
                 ]
             ]
+        , case model.keyBinds of
+            Parsed data ->
+                let
+                    isAllSelected =
+                        Set.size data.selectedFiles == Dict.size data.files
+
+                    fileList =
+                        Dict.keys data.files |> List.sort
+
+                    viewFileCheckbox filename =
+                        let
+                            isChecked =
+                                Set.member filename data.selectedFiles
+                        in
+                        label [ class "flex items-center gap-3 p-2 hover:bg-zinc-800/50 rounded-lg cursor-pointer transition-colors" ]
+                            [ input
+                                [ type_ "checkbox"
+                                , Html.Attributes.checked isChecked
+                                , Html.Events.onCheck (ToggleFile filename)
+                                , class "w-4 h-4 rounded border-zinc-700 text-violet-500 focus:ring-violet-500 focus:ring-offset-zinc-950 bg-zinc-900"
+                                ]
+                                []
+                            , span [ class "text-sm text-zinc-300 font-mono break-all" ]
+                                [ text filename ]
+                            , span [ class "ml-auto text-xs text-zinc-600 font-medium" ]
+                                [ text (String.fromInt (List.length (Maybe.withDefault [] (Dict.get filename data.files)))) ]
+                            ]
+                in
+                div [ class "mt-2 bg-zinc-800/30 border border-zinc-800 rounded-xl p-4 flex flex-col gap-2" ]
+                    [ div [ class "flex items-center justify-between mb-2" ]
+                        [ h4 [ class "text-xs font-bold text-zinc-400 uppercase tracking-widest" ]
+                            [ text "Included Files" ]
+                        , button
+                            [ class "text-xs font-medium text-violet-400 hover:text-violet-300 transition-colors"
+                            , Html.Events.onClick (ToggleAllFiles (not isAllSelected))
+                            ]
+                            [ text
+                                (if isAllSelected then
+                                    "Deselect All"
+
+                                 else
+                                    "Select All"
+                                )
+                            ]
+                        ]
+                    , div [ class "flex flex-col gap-1 max-h-48 overflow-y-auto pr-2" ]
+                        (List.map viewFileCheckbox fileList)
+                    ]
+
+            _ ->
+                text ""
         ]
 
 
@@ -652,8 +763,8 @@ viewKeyMapInfo model =
 
         bindings =
             case model.keyBinds of
-                Parsed dict ->
-                    Dict.get selectedId dict
+                Parsed data ->
+                    Dict.get selectedId (getActiveBindings data)
                         |> Maybe.withDefault []
                         |> List.filter (matchesSearch model.searchQuery)
 

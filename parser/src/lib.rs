@@ -48,6 +48,34 @@ pub fn parse_config(config: &str) -> Result<JsValue, JsError> {
         .map_err(|e| JsError::new(format!("Serde Error: {}", e).as_str()))
 }
 
+#[wasm_bindgen]
+pub fn extract_includes(config: &str) -> Result<JsValue, JsError> {
+    let includes = extract_includes_internal(config).map_err(|e| JsError::new(e.as_str()))?;
+
+    serde_wasm_bindgen::to_value(&includes)
+        .map_err(|e| JsError::new(format!("Serde Error: {}", e).as_str()))
+}
+
+pub fn extract_includes_internal(config: &str) -> Result<Vec<String>, String> {
+    let doc: KdlDocument = config
+        .parse()
+        .map_err(|e| format!("KDL Parse Error: {}", e))?;
+
+    let mut includes: Vec<String> = Vec::new();
+
+    for node in doc.nodes() {
+        if node.name().value() == "include" {
+            if let Some(entry) = node.entries().first() {
+                if let Some(val) = entry.value().as_string() {
+                    includes.push(val.to_string());
+                }
+            }
+        }
+    }
+
+    Ok(includes)
+}
+
 fn parse_single_bind(node: &KdlNode) -> Binding {
     let raw_combo = node.name().value().to_string();
     let parts: Vec<&str> = raw_combo.split('+').collect();
@@ -132,6 +160,19 @@ mod tests {
         assert_eq!(map_modifier("Super"), Some(Modifier::Super));
         assert_eq!(map_modifier("ctrl"), Some(Modifier::Ctrl));
         assert_eq!(map_modifier("not-a-mod"), None);
+    }
+
+    #[test]
+    fn test_extract_includes() {
+        let config = r#"
+            include "some-file.kdl"
+            include "another/file.kdl"
+            binds {
+                Mod+Return { spawn "alacritty"; }
+            }
+        "#;
+        let includes = extract_includes_internal(config).unwrap();
+        assert_eq!(includes, vec!["some-file.kdl", "another/file.kdl"]);
     }
 
     #[test]
