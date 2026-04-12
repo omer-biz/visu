@@ -49,3 +49,26 @@ checkMark =
             [ attribute "points" "20 6 9 17 4 12" ]
             []
         ]
+
+
+alert : Html msg
+alert =
+    svg [ fill "none", attribute "height" "14", attribute "stroke" "currentColor", attribute "stroke-linecap" "round", attribute "stroke-linejoin" "round", attribute "stroke-width" "2", viewBox "0 0 24 24", attribute "width" "14", attribute "xmlns" "http://www.w3.org/2000/svg" ]
+        [ node "circle"
+            [ attribute "cx" "12", attribute "cy" "12", attribute "r" "10" ]
+            []
+        , node "line"
+            [ attribute "x1" "12", attribute "x2" "12", attribute "y1" "8", attribute "y2" "12" ]
+            []
+        , node "line"
+            [ attribute "x1" "12", attribute "x2" "12.01", attribute "y1" "16", attribute "y2" "16" ]
+            []
+        ]
+
+
+spinner : Html msg
+spinner =
+    svg [ class "animate-spin", fill "none", attribute "height" "14", attribute "stroke" "currentColor", attribute "stroke-linecap" "round", attribute "stroke-linejoin" "round", attribute "stroke-width" "2", viewBox "0 0 24 24", attribute "width" "14", attribute "xmlns" "http://www.w3.org/2000/svg" ]
+        [ Svg.path [ d "M21 12a9 9 0 1 1-6.219-8.56" ]
+            []
+        ]

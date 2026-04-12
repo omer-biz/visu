@@ -105,7 +105,7 @@ update msg model =
                     ( { model | keyBinds = ErrorParsing err }, Cmd.none )
 
                 Err err ->
-                    ( { model | keyBinds = ErrorParsing (Decode.errorToString err) }, Cmd.none )
+                    ( { model | keyBinds = ErrorParsing <| Decode.errorToString err }, Cmd.none )
 
         FileSelected file ->
             ( model
@@ -204,30 +204,42 @@ modifierDecoder =
 
 view : Model -> Html Msg
 view model =
-    let
-        activeBindings =
-            case model.keyBinds of
-                Parsed dict ->
-                    Dict.size dict
-
-                _ ->
-                    0
-    in
     main_ [ class "flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden" ]
         [ viewUploadConfig model
         , viewKeyBoard model
         , viewKeyMapInfo model
-        , if activeBindings > 0 then
-            div [ class "fixed bottom-10 left-1/2 -translate-x-1/2 bg-zinc-800 border border-zinc-700 px-4 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-bounce" ]
-                [ div [ class "bg-green-500/20 text-green-500 p-1 rounded-full" ]
-                    [ SvgAssets.checkMark
+        , case model.keyBinds of
+            Parsing ->
+                div [ class "fixed bottom-10 left-1/2 -translate-x-1/2 bg-zinc-800 border border-zinc-700 px-4 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-pulse z-50" ]
+                    [ div [ class "bg-blue-500/20 text-blue-500 p-1 rounded-full" ]
+                        [ SvgAssets.spinner ]
+                    , span [ class "text-sm font-medium text-zinc-200" ]
+                        [ text "Parsing formatting configuration..." ]
                     ]
-                , span [ class "text-sm font-medium" ]
-                    [ text ("Parsed " ++ String.fromInt activeBindings ++ " keybindings from config") ]
-                ]
 
-          else
-            text ""
+            ErrorParsing err ->
+                div [ class "fixed bottom-10 left-1/2 -translate-x-1/2 bg-zinc-800/90 backdrop-blur-md border border-red-700/50 p-4 rounded-2xl shadow-2xl flex flex-col gap-3 max-w-xl w-full z-50" ]
+                    [ div [ class "flex items-center gap-3 text-red-500 font-bold" ]
+                        [ SvgAssets.alert
+                        , text "Error Parsing Config"
+                        ]
+                    , div [ class "text-xs text-red-400 overflow-y-auto max-h-48 bg-red-500/10 p-3 rounded-lg w-full font-mono whitespace-pre-wrap leading-relaxed shadow-inner" ]
+                        [ text err ]
+                    ]
+
+            Parsed dict ->
+                if Dict.size dict > 0 then
+                    div [ class "fixed bottom-10 left-1/2 -translate-x-1/2 bg-zinc-800 border border-zinc-700 px-4 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-bounce z-50" ]
+                        [ div [ class "bg-green-500/20 text-green-500 p-1 rounded-full" ]
+                            [ SvgAssets.checkMark ]
+                        , span [ class "text-sm font-medium" ]
+                            [ text ("Parsed " ++ String.fromInt (Dict.size dict) ++ " keybindings from config") ]
+                        ]
+                else
+                    text ""
+
+            NotProvided ->
+                text ""
         ]
 
 
@@ -318,7 +330,19 @@ viewList model =
                         allBindings
                     )
 
-        _ ->
+        Parsing ->
+            div [ class "w-full p-12 text-center border border-dashed border-blue-800/50 rounded-2xl bg-blue-900/10 flex flex-col items-center justify-center gap-4" ]
+                [ div [ class "text-blue-500" ] [ SvgAssets.spinner ]
+                , p [ class "text-blue-400 text-sm font-medium animate-pulse" ] [ text "Parsing config..." ] 
+                ]
+
+        ErrorParsing _ ->
+            div [ class "w-full p-12 text-center border border-dashed border-red-800/50 rounded-2xl bg-red-900/10 flex flex-col items-center justify-center gap-4" ]
+                [ div [ class "text-red-500" ] [ SvgAssets.alert ]
+                , p [ class "text-red-400 text-sm font-medium" ] [ text "Could not parse config. Please check the error below." ] 
+                ]
+
+        NotProvided ->
             div [ class "w-full p-12 text-center border border-dashed border-zinc-800 rounded-2xl opacity-50 bg-zinc-900" ]
                 [ p [ class "text-zinc-400 text-sm font-medium" ] [ text "Upload a config to see bindings." ] ]
 
@@ -580,6 +604,7 @@ viewUploadConfig model =
                     , accept ".kdl"
                     , class "absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     , onFileChange FileSelected
+                    , Html.Attributes.value ""
                     ]
                     []
                 , div
