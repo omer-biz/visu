@@ -146,7 +146,7 @@ mod tests {
 
         let result = parse_single_bind(bind_node);
 
-        assert_eq!(result.key, "Slash");
+        assert_eq!(result.key, "slash");
         assert_eq!(result.modifiers, vec![Modifier::Mod, Modifier::Shift]);
         assert_eq!(result.actions, vec!["show-hotkey-overlay"]);
 
@@ -287,7 +287,7 @@ mod tests {
 
         let bindings: Vec<Binding> = children.nodes().iter().map(parse_single_bind).collect();
 
-        let terminal = bindings.iter().find(|b| b.key == "Return").unwrap();
+        let terminal = bindings.iter().find(|b| b.key == "return").unwrap();
         assert_eq!(terminal.modifiers, vec![Modifier::Mod]);
         assert_eq!(terminal.actions, vec!["spawn alacritty"]);
         assert_eq!(
@@ -302,7 +302,7 @@ mod tests {
 
         let brightness = bindings
             .iter()
-            .find(|b| b.key == "XF86MonBrightnessUp")
+            .find(|b| b.key == "xf86monbrightnessup")
             .unwrap();
         assert!(brightness.modifiers.is_empty());
         assert_eq!(
@@ -323,7 +323,7 @@ mod tests {
         assert_eq!(workspace_3.modifiers, vec![Modifier::Mod]);
         assert_eq!(workspace_3.actions, vec!["focus-workspace 3"]);
 
-        let repeat_opt = bindings.iter().find(|b| b.key == "O").unwrap();
+        let repeat_opt = bindings.iter().find(|b| b.key == "o").unwrap();
         assert_eq!(
             repeat_opt
                 .options
