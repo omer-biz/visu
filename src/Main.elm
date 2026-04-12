@@ -254,7 +254,7 @@ viewKeyBoard model =
                 _ ->
                     0
     in
-    section [ class "lg:col-span-6 bg-zinc-950 p-8 overflow-x-auto flex flex-col items-center justify-start" ]
+    section [ class "lg:col-span-6 bg-zinc-950 p-4 lg:p-8 overflow-x-auto flex flex-col items-center justify-start" ]
         [ div [ class "w-full max-w-4xl" ]
             [ div [ class "flex justify-between items-center mb-8" ]
                 [ div []
@@ -263,7 +263,7 @@ viewKeyBoard model =
                     , p [ class "text-zinc-500 text-sm" ]
                         [ text (String.fromInt activeBindingsCount ++ " active bindings detected") ]
                     ]
-                , div [ class "flex bg-zinc-900 p-1 rounded-lg border border-zinc-800" ]
+                , div [ class "hidden lg:flex bg-zinc-900 p-1 rounded-lg border border-zinc-800" ]
                     [ button
                         [ class
                             (if model.viewMode == Physical then
@@ -288,14 +288,19 @@ viewKeyBoard model =
                         [ text "List View" ]
                     ]
                 ]
-            , if model.viewMode == Physical then
-                div [ class "kb-grid p-4 bg-zinc-900 rounded-2xl border border-zinc-800 shadow-2xl" ]
-                    (List.map (viewKey model) keyboardLayout)
+            , div [ class "hidden lg:block w-full" ]
+                [ if model.viewMode == Physical then
+                    div [ class "kb-grid p-4 bg-zinc-900 rounded-2xl border border-zinc-800 shadow-2xl" ]
+                        (List.map (viewKey model) keyboardLayout)
 
-              else
-                viewList model
+                  else
+                    viewList model
+                ]
+            , div [ class "block lg:hidden w-full" ]
+                [ viewList model ]
             , if model.viewMode == Physical then
-                viewLegend
+                div [ class "hidden lg:block w-full" ]
+                    [ viewLegend ]
 
               else
                 text ""
